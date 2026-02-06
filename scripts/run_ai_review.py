@@ -87,7 +87,7 @@ def run_agent(diff: str, style: str, arch: str, anti: str) -> str:
     model_id = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
     agent = Agent(
         model=Gemini(id=model_id),
-        instruction=build_system_prompt(style, arch, anti),
+        instructions=build_system_prompt(style, arch, anti),
         markdown=False,
     )
     user_message = f"Review this git diff and respond with the JSON object only.\n\n```diff\n{diff}\n```"
