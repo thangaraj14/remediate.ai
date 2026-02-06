@@ -84,7 +84,8 @@ def run_agent(diff: str, style: str, arch: str, anti: str) -> str:
     if not os.environ.get("GOOGLE_API_KEY"):
         sys.exit("Set GOOGLE_API_KEY to run the review agent.")
 
-    model_id = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+    # Default to a current stable model (gemini-1.5-flash is deprecated / not found in v1beta)
+    model_id = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
     agent = Agent(
         model=Gemini(id=model_id),
         instructions=build_system_prompt(style, arch, anti),
@@ -103,6 +104,24 @@ def run_agent(diff: str, style: str, arch: str, anti: str) -> str:
 def parse_json_response(raw: str) -> dict:
     """Extract JSON from agent response; always return dict with non-empty summary."""
     raw = (raw or "").strip()
+
+    # If the API returned an error (e.g. model not found), surface it clearly
+    if '"error"' in raw and '"code"' in raw and '"message"' in raw:
+        try:
+            err = json.loads(raw)
+            msg = err.get("error", {}).get("message", raw[:500])
+            return {
+                "inline_comments": [],
+                "summary": (
+                    "**Gemini API error.** The review could not be completed.\n\n"
+                    f"Message: {msg}\n\n"
+                    "Common fixes: set `GEMINI_MODEL` to a current model (e.g. `gemini-2.5-flash`) "
+                    "or check [Gemini models](https://ai.google.dev/gemini-api/docs/models)."
+                ),
+            }
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     json_str = raw
 
     # Try to find JSON in a code block (greedy so nested braces are included)
