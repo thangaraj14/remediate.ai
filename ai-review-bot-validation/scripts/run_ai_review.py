@@ -29,10 +29,14 @@ def load_diff() -> str:
 
 
 def load_context() -> tuple[str, str, str]:
-    """Load STYLE_GUIDE, ARCHITECTURE_IMPROVEMENTS, and ANTI_PATTERNS."""
-    style = (REPO_ROOT / "STYLE_GUIDE.md").read_text()
-    arch = (REPO_ROOT / "docs" / "ARCHITECTURE_IMPROVEMENTS.md").read_text()
-    anti = (REPO_ROOT / "docs" / "ANTI_PATTERNS.md").read_text()
+    """Load STYLE_GUIDE, ARCHITECTURE_IMPROVEMENTS, and ANTI_PATTERNS; use fallbacks if missing."""
+    fallback = "No repository-specific guide found. Apply general best practices: clarity, security, consistency."
+    style_path = REPO_ROOT / "STYLE_GUIDE.md"
+    arch_path = REPO_ROOT / "docs" / "ARCHITECTURE_IMPROVEMENTS.md"
+    anti_path = REPO_ROOT / "docs" / "ANTI_PATTERNS.md"
+    style = style_path.read_text() if style_path.exists() else fallback
+    arch = arch_path.read_text() if arch_path.exists() else fallback
+    anti = anti_path.read_text() if anti_path.exists() else fallback
     return style, arch, anti
 
 
@@ -127,8 +131,10 @@ def post_to_github(
     """Post inline comments and summary to the PR."""
     import requests
 
+    # Support GitHub Enterprise (e.g. GITHUB_API_URL = https://github.gwd.broadcom.net/api/v3)
+    api_base = os.environ.get("GITHUB_API_URL", "https://api.github.com").rstrip("/")
     owner, repo_name = repo.split("/", 1)
-    base = f"https://api.github.com/repos/{owner}/{repo_name}"
+    base = f"{api_base}/repos/{owner}/{repo_name}"
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
