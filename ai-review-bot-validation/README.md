@@ -74,6 +74,23 @@ PR_DIFF_FILE=/tmp/pr.diff python scripts/run_ai_review.py --dry-run
 - Python 3.10+
 - `agno[google]` for Gemini; see `requirements.txt`.
 
+## Why are no review comments appearing?
+
+If the workflow runs but no inline/summary comments are posted, check:
+
+1. **Workflow is in this repo**  
+   The AI Review Bot only runs when `.github/workflows/ai-review.yml` is in the **same repo** as the PR. If you opened a PR in a different repo (e.g. `remediate.ai`), copy this workflow plus `scripts/`, `requirements.txt`, and optional `STYLE_GUIDE.md` / `docs/` into that repo.
+
+2. **GOOGLE_API_KEY is set**  
+   In the PR’s **Actions** tab, open the “AI Review Bot” run. If you see  
+   `::error::GOOGLE_API_KEY is not set...`, add the secret in **Settings → Secrets and variables → Actions** and re-run the workflow (or push a small commit).
+
+3. **Workflow ran from the PR branch**  
+   The workflow runs from the branch that has the PR. Ensure that branch contains `.github/workflows/ai-review.yml` (and `scripts/run_ai_review.py`, `requirements.txt`). If the workflow was only added on `main` after the PR was opened, push a commit to the PR branch or re-run the workflow.
+
+4. **GitHub Enterprise**  
+   The script uses `GITHUB_API_URL` (set in the workflow from `github.server_url`). If you use a different API base, set `GITHUB_API_URL` in the workflow env.
+
 ## Validation checklist
 
 After pushing and opening a PR, confirm:
