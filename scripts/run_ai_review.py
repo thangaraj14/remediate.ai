@@ -62,12 +62,12 @@ Review the provided git diff. For each meaningful finding (style, security, perf
    - Grades the change on: Consistency, Quality, Security (use: Good / Needs improvement / Critical).
    - Lists the top 3 actionable improvements.
 
-Respond with a single JSON object only, no markdown or extra text:
+**Output format:** Reply with ONLY a single JSON object. No markdown code fences (no ```), no explanation before or after. The "summary" field MUST be a non-empty string (at least 2–3 sentences with grades and top items).
 {{
   "inline_comments": [
     {{ "path": "<file path>", "line": <number>, "body": "<comment>" }}
   ],
-  "summary": "<markdown summary with grades and top 3 items>"
+  "summary": "<non-empty markdown: grades for Consistency, Quality, Security and top 3 improvements>"
 }}
 If there are no inline comments, use "inline_comments": [].
 Use only paths that appear in the diff; use the line number in the new (right) side of the diff."""
@@ -101,23 +101,52 @@ def run_agent(diff: str, style: str, arch: str, anti: str) -> str:
 
 
 def parse_json_response(raw: str) -> dict:
-    """Extract JSON from agent response (handle markdown code block)."""
-    raw = raw.strip()
-    # Try to find JSON in a code block
-    match = re.search(r"```(?:json)?\s*(\{.*\})\s*```", raw, re.DOTALL)
-    if match:
-        raw = match.group(1)
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        # Fallback: find first { ... }
+    """Extract JSON from agent response; always return dict with non-empty summary."""
+    raw = (raw or "").strip()
+    json_str = raw
+
+    # Try to find JSON in a code block (greedy so nested braces are included)
+    for pattern in (r"```(?:json)?\s*(\{.*\})\s*```", r"```\s*(\{.*\})\s*```"):
+        match = re.search(pattern, raw, re.DOTALL)
+        if match:
+            json_str = match.group(1).strip()
+            break
+    else:
+        # No code block: use first { ... } (greedy to get full object)
         match = re.search(r"\{.*\}", raw, re.DOTALL)
         if match:
-            try:
-                return json.loads(match.group(0))
-            except json.JSONDecodeError:
-                pass
-    return {"inline_comments": [], "summary": raw[:2000]}
+            json_str = match.group(0)
+
+    try:
+        data = json.loads(json_str)
+        if not isinstance(data, dict):
+            raise json.JSONDecodeError("Not a dict", "", 0)
+        # Normalize: accept alternative keys for summary
+        summary = (
+            (data.get("summary") or data.get("executive_summary") or data.get("overall_summary"))
+            or ""
+        )
+        if isinstance(summary, str) and summary.strip():
+            data["summary"] = summary.strip()
+        else:
+            data["summary"] = _fallback_summary(raw)
+        data["inline_comments"] = data.get("inline_comments") or []
+        return data
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return {"inline_comments": [], "summary": _fallback_summary(raw)}
+
+
+def _fallback_summary(raw: str) -> str:
+    """Build a fallback summary when JSON parsing fails or summary is missing."""
+    if not (raw or "").strip():
+        return "The review agent did not return any output. Check Actions logs for errors."
+    truncated = (raw.strip()[:1800] + "…") if len(raw) > 1800 else raw.strip()
+    return (
+        "**Summary could not be parsed as structured JSON.** Below is the raw agent output (truncated):\n\n"
+        "---\n\n"
+        + truncated
+    )
 
 
 def post_to_github(
