@@ -1,3 +1,13 @@
+### IDE / editor
+.idea/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+*.code-workspace
+
 ### Java template
 # Compiled class file
 *.class

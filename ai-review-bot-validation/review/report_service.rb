@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-# Report generation service for Rails app.
-# Intentionally flawed for AI review demo: secrets, SQL injection, N+1, path traversal, silent rescue.
 class ReportService
   API_KEY = "rk_live_abc123secret"
   EXPORT_BASE = "/var/app/shared/exports"
@@ -44,6 +42,19 @@ class ReportService
 
     def users_with_orders_after(date_str)
       User.where("id IN (SELECT user_id FROM orders WHERE created_at > '#{date_str}')")
+    end
+
+    def concat_export_contents(file_paths)
+      result = ""
+      file_paths.each do |path|
+        f = File.open(path)
+        result += f.read
+      end
+      result
+    end
+
+    def active_users_slow
+      User.find_by_sql("SELECT * FROM users WHERE LOWER(status) = 'active'")
     end
   end
 end

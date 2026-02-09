@@ -2,10 +2,6 @@ package review
 
 import java.sql.{Connection, DriverManager, ResultSet, Statement}
 
-/**
- * Payment repository with intentional issues for AI review demo:
- * hardcoded credentials, SQL injection, resource leak, swallowed exceptions.
- */
 object PaymentRepository {
 
   private val JdbcUrl  = "jdbc:postgresql://prod-payments.internal:5432/payments"
@@ -23,7 +19,6 @@ object PaymentRepository {
     } catch {
       case _: Exception => None
     }
-    // rs, stmt, conn never closed — resource leak
   }
 
   def getAmount(paymentId: Long): Option[Double] = {
@@ -41,7 +36,6 @@ object PaymentRepository {
     } catch {
       case _: Exception =>
         None
-        // conn, stmt, rs not closed on exception — resource leak; no logging
     } finally {
       if (rs != null) rs.close()
       if (stmt != null) stmt.close()
@@ -57,6 +51,17 @@ object PaymentRepository {
     val updated = stmt.executeUpdate() > 0
     conn.close()
     updated
-    // stmt not closed; if executeUpdate or close throws, conn may leak
+  }
+
+  def allStatuses: List[String] = {
+    val conn = DriverManager.getConnection(JdbcUrl, User, Password)
+    val stmt = conn.createStatement()
+    val rs   = stmt.executeQuery("SELECT * FROM payments")
+    val out  = scala.collection.mutable.ListBuffer.empty[String]
+    while (rs.next()) out += rs.getString("status")
+    rs.close()
+    stmt.close()
+    conn.close()
+    out.toList
   }
 }

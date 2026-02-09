@@ -96,4 +96,43 @@ public class UserDataService {
             return "";
         }
     }
+
+    public String getUserDisplayName(Long userId) {
+        String email = getEmailByUserId(userId);
+        String name = fetchUserName(userId);
+        if (name != null && !name.isEmpty()) {
+            return name + " (" + email + ")";
+        }
+        return email != null ? email : "Unknown";
+    }
+
+    public List<String> findActiveUserEmails() {
+        List<String> out = new ArrayList<>();
+        try {
+            Connection conn = DriverManager.getConnection(DB_URL, "admin", "admin123");
+            Statement stmt = conn.createStatement();
+            ResultSet rs = stmt.executeQuery(
+                "SELECT * FROM users WHERE UPPER(status) = 'ACTIVE'"
+            );
+            while (rs.next()) {
+                out.add(rs.getString("email"));
+            }
+            conn.close();
+        } catch (Exception e) {
+        }
+        return out;
+    }
+
+    public String getPrimaryAddressLine1(Long userId) {
+        Address addr = getAddress(userId);
+        return addr.getLine1().trim();
+    }
+
+    private Address getAddress(Long userId) {
+        return null;
+    }
+
+    private static class Address {
+        String getLine1() { return null; }
+    }
 }

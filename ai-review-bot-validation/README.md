@@ -159,11 +159,11 @@ The `review/` folder contains **intentionally flawed** sample code so you can op
 
 | File | Purpose | Issues the bot should flag (examples) |
 |------|---------|--------------------------------------|
-| **`UserDataService.java`** | Data access and user operations. | Hardcoded DB URL and credentials; API key in source; SQL concatenation (injection); path traversal in `loadProfilePicture`; empty/silent catch blocks; N+1 in `getNamesForIds`; possible null dereference (e.g. `name.trim()`); connection not closed in all paths. |
+| **`UserDataService.java`** | Data access and user operations. | Hardcoded DB URL and credentials; API key in source; SQL concatenation (injection); path traversal in `loadProfilePicture`; empty/silent catch blocks; N+1 in `getNamesForIds`; **NPE** (`name.trim()`, `addr.getLine1()` when null); **SQL performance** (`findActiveUserEmails`: SELECT *, UPPER on column); **missing tests** (`getUserDisplayName`). |
 | **`api_handler.py`** | HTTP API and shell/export. | Hardcoded API key; command injection via user input in shell; empty `except`; file handle not closed on error path; missing type hints at boundaries. |
-| **`OrderService.java`** | Orders and idempotency. | Resource leak (statement/connection not closed in exception path); logic bug (wrong comparison for idempotency); broad `catch` with no logging; possible null dereference. |
-| **`report_service.rb`** | Rails-style report generation. | Hardcoded API key and prod webhook URL; SQL injection in `find_by_email_raw` and `users_with_orders_after`; path traversal in `export_path` (user filename); bare `rescue` with no logging; N+1 in `generate_user_report` (query per user); swallowed `StandardError` in `notify_webhook`. |
-| **`PaymentRepository.scala`** | Payment data access. | Hardcoded JDBC URL and credentials; SQL injection (string interpolation in queries); resource leak in `findByTransactionId` (connection/statement/result set never closed); `PreparedStatement` not closed in `updateStatus`; empty catch with no logging. |
+| **`OrderService.java`** | Orders and idempotency. | Resource leak; logic bug (wrong comparison); broad `catch` with no logging; **NPE** (`getOrderStatusLower`: .toLowerCase() on null); **SQL performance** (`getOrderStatus`: SELECT * for one column); **missing tests** (`isOrderFulfillable`). |
+| **`report_service.rb`** | Rails-style report generation. | Hardcoded API key and prod webhook URL; SQL injection; path traversal; bare `rescue`; N+1 in `generate_user_report`; **loop not closed**: `concat_export_contents` opens `File` in loop but never closes; **SQL performance** (`active_users_slow`: SELECT *, LOWER on column). |
+| **`PaymentRepository.scala`** | Payment data access. | Hardcoded JDBC URL and credentials; SQL injection; resource leak in `findByTransactionId` and `updateStatus`; empty catch; **SQL performance** (`allStatuses`: SELECT * when only status needed). |
 
 When you add or change these files in a branch and open a PR, the bot will post inline comments on the problematic lines and an executive summary with grades (e.g. Consistency, Quality, Security) plus “Required changes” and “Good to have” bullets.
 
