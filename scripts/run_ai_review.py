@@ -159,6 +159,46 @@ def run_agent(diff: str, style: str, arch: str, anti: str, config: dict) -> str:
     return str(response)
 
 
+def _extract_json_object(text: str) -> str | None:
+    """Extract the first top-level {...} with balanced braces. Handles nested braces and double-quoted strings (JSON)."""
+    start = text.find("{")
+    if start < 0:
+        return None
+    depth = 0
+    i = start
+    in_string = False
+    escape = False
+    while i < len(text):
+        c = text[i]
+        if escape:
+            escape = False
+            i += 1
+            continue
+        if in_string:
+            if c == "\\":
+                escape = True
+            elif c == '"':
+                in_string = False
+            i += 1
+            continue
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+        elif c == '"':
+            in_string = True
+        i += 1
+    return None
+
+
+def _fix_common_json_issues(s: str) -> str:
+    """Remove trailing commas before ] or } so strict JSON parser accepts LLM output."""
+    s = re.sub(r",\s*([}\]])", r"\1", s)
+    return s
+
+
 def parse_json_response(raw: str) -> dict:
     """Extract JSON from agent response; always return dict with non-empty summary."""
     raw = (raw or "").strip()
@@ -180,37 +220,41 @@ def parse_json_response(raw: str) -> dict:
         except (json.JSONDecodeError, TypeError):
             pass
 
-    json_str = raw
+    json_str = None
 
-    # Try to find JSON in a code block (greedy so nested braces are included)
-    for pattern in (r"```(?:json)?\s*(\{.*\})\s*```", r"```\s*(\{.*\})\s*```"):
-        match = re.search(pattern, raw, re.DOTALL)
-        if match:
-            json_str = match.group(1).strip()
-            break
-    else:
-        # No code block: use first { ... } (greedy to get full object)
-        match = re.search(r"\{.*\}", raw, re.DOTALL)
+    # 1) Code block: take content between ``` and ```, then extract JSON object
+    code_block = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", raw)
+    if code_block:
+        block = code_block.group(1).strip()
+        json_str = _extract_json_object(block) or (block if block.startswith("{") else None)
+    if json_str is None:
+        # 2) Balanced-brace extraction (handles summary text containing } or extra text)
+        json_str = _extract_json_object(raw)
+    if json_str is None:
+        # 3) Fallback: first { to last } (greedy)
+        match = re.search(r"\{[\s\S]*\}", raw)
         if match:
             json_str = match.group(0)
 
-    try:
-        data = json.loads(json_str)
-        if not isinstance(data, dict):
-            raise json.JSONDecodeError("Not a dict", "", 0)
-        # Normalize: accept alternative keys for summary
-        summary = (
-            (data.get("summary") or data.get("executive_summary") or data.get("overall_summary"))
-            or ""
-        )
-        if isinstance(summary, str) and summary.strip():
-            data["summary"] = summary.strip()
-        else:
-            data["summary"] = _fallback_summary(raw)
-        data["inline_comments"] = data.get("inline_comments") or []
-        return data
-    except (json.JSONDecodeError, TypeError):
-        pass
+    if json_str:
+        json_str = _fix_common_json_issues(json_str)
+        try:
+            data = json.loads(json_str)
+            if not isinstance(data, dict):
+                raise json.JSONDecodeError("Not a dict", "", 0)
+            # Normalize: accept alternative keys for summary
+            summary = (
+                (data.get("summary") or data.get("executive_summary") or data.get("overall_summary"))
+                or ""
+            )
+            if isinstance(summary, str) and summary.strip():
+                data["summary"] = summary.strip()
+            else:
+                data["summary"] = _fallback_summary(raw)
+            data["inline_comments"] = data.get("inline_comments") or []
+            return data
+        except (json.JSONDecodeError, TypeError):
+            pass
     return {"inline_comments": [], "summary": _fallback_summary(raw)}
 
 
