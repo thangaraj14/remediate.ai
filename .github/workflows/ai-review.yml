@@ -41,8 +41,8 @@ def load_context() -> tuple[str, str, str]:
 
 
 def build_system_prompt(style: str, arch: str, anti: str) -> str:
-    """Build the Senior VCF Engineer persona and knowledge."""
-    return f"""You are a Senior VCF Engineer performing a rigorous, professional code review.
+    """Build the Senior Engineer persona and repository knowledge."""
+    return f"""You are a Senior Engineer performing a rigorous, professional code review.
 
 ## Repository knowledge
 
@@ -56,11 +56,17 @@ def build_system_prompt(style: str, arch: str, anti: str) -> str:
 {anti}
 
 ## Your task
-Review the provided git diff. For each meaningful finding (style, security, performance, logic):
-1. Produce up to 5 **inline comments** with: file path (as in the diff), line number (in the new file), and a short, actionable comment. Be specific and suggest a fix when possible.
+Review the provided git diff. Classify findings into:
+- **Required changes**: Must-fix items (bugs, security issues, critical style/architecture violations, logic errors). These may be posted as inline comments.
+- **Good to have**: Optional improvements (readability, minor style, refactors). Do **not** post these as inline comments; list them only in required_changes / good_to_have arrays and summary.
+
+Be selective—do not pollute the PR with excessive suggestions. Reserve inline comments for required/critical findings only (max 5). Put good-to-have items only in good_to_have and summary.
+
+1. Produce up to 5 **inline comments** only for **required** findings: file path (as in the diff), line number (in the new file), short actionable comment. Be specific and suggest a fix when possible.
 2. Produce **grades** for Consistency, Quality, Security (each exactly: "Good", "Needs improvement", or "Critical").
-3. Produce exactly **3 actionable improvements** as short, imperative sentences (e.g. "Externalize the config path via env var.").
-4. Produce a short **summary** narrative (1–3 sentences) describing the change and overall assessment.
+3. Produce **required_changes**: up to 3 must-fix items as short imperative sentences.
+4. Produce **good_to_have**: up to 3 optional improvements as short imperative sentences.
+5. Produce a short **summary** narrative (1–3 sentences) describing the change and overall assessment.
 
 **Output format:** Reply with ONLY a single JSON object. No markdown code fences (no ```), no explanation before or after.
 {{
@@ -72,10 +78,11 @@ Review the provided git diff. For each meaningful finding (style, security, perf
     "quality": "Good" | "Needs improvement" | "Critical",
     "security": "Good" | "Needs improvement" | "Critical"
   }},
-  "top_improvements": ["<imperative sentence 1>", "<imperative sentence 2>", "<imperative sentence 3>"],
+  "required_changes": ["<must-fix 1>", "<must-fix 2>", "<must-fix 3>"],
+  "good_to_have": ["<optional 1>", "<optional 2>", "<optional 3>"],
   "summary": "<short narrative: what changed and overall assessment>"
 }}
-If there are no inline comments, use "inline_comments": [].
+If there are no inline comments, use "inline_comments": []. Omit required_changes or good_to_have entries if none.
 Use only paths that appear in the diff; use the line number in the new (right) side of the diff."""
 
 
@@ -168,10 +175,14 @@ def parse_json_response(raw: str) -> dict:
             data["grades"] = {}
         tops = data.get("top_improvements") or data.get("top_3") or []
         data["top_improvements"] = [t.strip() for t in tops if isinstance(t, str) and t.strip()][:3]
+        req = data.get("required_changes") or []
+        data["required_changes"] = [t.strip() for t in req if isinstance(t, str) and t.strip()][:3]
+        gth = data.get("good_to_have") or []
+        data["good_to_have"] = [t.strip() for t in gth if isinstance(t, str) and t.strip()][:3]
         return data
     except (json.JSONDecodeError, TypeError):
         pass
-    return {"inline_comments": [], "summary": _fallback_summary(raw), "grades": {}, "top_improvements": []}
+    return {"inline_comments": [], "summary": _fallback_summary(raw), "grades": {}, "top_improvements": [], "required_changes": [], "good_to_have": []}
 
 
 def _fallback_summary(raw: str) -> str:
@@ -204,7 +215,8 @@ def build_enhanced_summary(data: dict) -> str:
     """Build an interactive, scannable PR summary with table, checklist, and optional details."""
     summary = (data.get("summary") or "").strip()
     grades = data.get("grades") or {}
-    top = data.get("top_improvements") or []
+    required = data.get("required_changes") or []
+    good_to_have = data.get("good_to_have") or []
     inline = data.get("inline_comments") or []
 
     parts = ["## 🤖 AI-Review-Bot — Executive summary", ""]
@@ -252,16 +264,23 @@ def build_enhanced_summary(data: dict) -> str:
             parts.append(summary)
             parts.append("")
 
-    # Action items as GitHub task list (checkable)
-    if top:
+    # Required changes (checkable)
+    if required:
         parts.append("---")
         parts.append("")
-        parts.append("### ✅ Action items")
+        parts.append("### ✅ Required changes")
         parts.append("")
-        parts.append("Check off items as you address them:")
+        for item in required:
+            line = item.strip()
+            if line.startswith("["):
+                line = "\\" + line
+            parts.append(f"- [ ] {line}")
         parts.append("")
-        for item in top:
-            # Escape any leading '[' that could break task list
+    # Good to have (checkable)
+    if good_to_have:
+        parts.append("### 💡 Good to have")
+        parts.append("")
+        for item in good_to_have:
             line = item.strip()
             if line.startswith("["):
                 line = "\\" + line
@@ -360,7 +379,7 @@ def main() -> None:
     inline = data.get("inline_comments") or []
     summary = data.get("summary") or "No summary generated."
     # Build comment body: enhanced (table + checklist) when we have grades/top_improvements
-    if data.get("grades") or data.get("top_improvements"):
+    if data.get("grades") or data.get("required_changes") or data.get("good_to_have") or data.get("top_improvements"):
         summary_body = build_enhanced_summary(data)
     else:
         summary_body = f"## AI-Review-Bot — Executive summary\n\n{summary}"

@@ -1,4 +1,4 @@
-# VCF Engineering Style Guide
+# Engineering Style Guide
 
 This document is injected into the AI-Review-Bot as repository-specific context. The agent should evaluate PRs against these standards.
 

@@ -6,7 +6,7 @@ This repository is a **validation harness** for the AI-Review-Bot—an agentic a
 
 - **Trigger**: `pull_request` (opened / synchronize) → GitHub Action runs.
 - **Context**: Deep checkout + `git diff` isolation.
-- **Brain**: Agno Agent with "Senior VCF Engineer" persona + repository knowledge (STYLE_GUIDE, anti-patterns).
+- **Brain**: Agno Agent with "Senior Engineer" persona + repository knowledge (STYLE_GUIDE, anti-patterns).
 - **LLM**: Gemini 1.5 Pro/Flash for security, performance, and readability analysis.
 - **Output**: Inline comments on the diff + executive summary comment on the PR.
 

@@ -41,8 +41,8 @@ def load_context() -> tuple[str, str, str]:
 
 
 def build_system_prompt(style: str, arch: str, anti: str) -> str:
-    """Build the Senior VCF Engineer persona and knowledge."""
-    return f"""You are a Senior VCF Engineer performing a rigorous, professional code review.
+    """Build the Senior Engineer persona and repository knowledge."""
+    return f"""You are a Senior Engineer performing a rigorous, professional code review.
 
 ## Repository knowledge
 
@@ -56,18 +56,23 @@ def build_system_prompt(style: str, arch: str, anti: str) -> str:
 {anti}
 
 ## Your task
-Review the provided git diff. For each meaningful finding (style, security, performance, logic):
-1. Produce up to 5 **inline comments** with: file path (as in the diff), line number (in the new file), and a short, actionable comment. Be specific and suggest a fix when possible.
+Review the provided git diff. Classify findings into:
+- **Required changes**: Must-fix items (bugs, security issues, critical style/architecture violations, logic errors). These may be posted as inline comments.
+- **Good to have**: Optional improvements (readability, minor style, refactors). Do **not** post these as inline comments; list them only in the summary.
+
+Be selective—do not pollute the PR with excessive suggestions. Reserve inline comments for required/critical findings only (max 5). Put good-to-have items only in the summary.
+
+1. Produce up to 5 **inline comments** only for **required** findings: file path (as in the diff), line number (in the new file), short actionable comment. Be specific and suggest a fix when possible.
 2. Produce one **executive summary** that:
    - Grades the change on: Consistency, Quality, Security (use: Good / Needs improvement / Critical).
-   - Lists the top 3 actionable improvements.
+   - Lists **Required changes** (must fix) and **Good to have** (optional), each as a short bullet list (top 3 each at most).
 
 Respond with a single JSON object only, no markdown or extra text:
 {{
   "inline_comments": [
     {{ "path": "<file path>", "line": <number>, "body": "<comment>" }}
   ],
-  "summary": "<markdown summary with grades and top 3 items>"
+  "summary": "<markdown summary with grades; Required changes; Good to have>"
 }}
 If there are no inline comments, use "inline_comments": [].
 Use only paths that appear in the diff; use the line number in the new (right) side of the diff."""
