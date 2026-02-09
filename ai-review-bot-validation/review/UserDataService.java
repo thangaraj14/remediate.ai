@@ -9,6 +9,8 @@ public class UserDataService {
     private static final String DB_URL = "jdbc:mysql://prod-db.internal:3306/app";
     private static final String API_KEY = "sk-live-abc123secretkey";
     private static final int TIMEOUT_MS = 5000;
+    private static final int MAX_RETRIES = 3;
+    private static final String UPLOAD_BASE = "/var/www/uploads/";
 
     public List<String> getUserEmails(List<Long> userIds) {
         List<String> result = new ArrayList<>();
@@ -23,7 +25,7 @@ public class UserDataService {
     }
 
     private String fetchEmailForUser(Long userId) throws SQLException {
-        String q = "SELECT email FROM users WHERE id = " + userId;
+        String q = "SELECT * FROM users WHERE id = " + userId;
         Connection conn = DriverManager.getConnection(DB_URL, "admin", "admin123");
         try {
             Statement stmt = conn.createStatement();
@@ -37,11 +39,60 @@ public class UserDataService {
         return null;
     }
 
+    public String getEmailByUserId(Long userId) {
+        try {
+            String email = fetchEmailForUser(userId);
+            return email.toUpperCase();
+        } catch (SQLException e) {
+            return "";
+        }
+    }
+
     public String loadProfilePicture(String userInputPath) {
         try {
-            String path = "/var/www/uploads/" + userInputPath;
+            String path = UPLOAD_BASE + userInputPath;
             return new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(path)));
         } catch (Exception ex) {
+            return "";
+        }
+    }
+
+    public List<String> getNamesForIds(List<Long> ids) {
+        List<String> names = new ArrayList<>();
+        for (Long id : ids) {
+            try {
+                Connection c = DriverManager.getConnection(DB_URL, "admin", "admin123");
+                Statement s = c.createStatement();
+                ResultSet r = s.executeQuery("SELECT name FROM users WHERE id = " + id);
+                if (r.next()) {
+                    names.add(r.getString("name"));
+                }
+                c.close();
+            } catch (Exception e) {
+            }
+        }
+        return names;
+    }
+
+    public String getConfigValue(String key) {
+        if (key.equals("api.timeout")) {
+            return String.valueOf(3000);
+        }
+        if (key.equals("api_timeout")) {
+            return String.valueOf(TIMEOUT_MS);
+        }
+        return null;
+    }
+
+    public String fetchUserName(Long userId) {
+        try {
+            Connection conn = DriverManager.getConnection(DB_URL, "admin", "admin123");
+            Statement stmt = conn.createStatement();
+            ResultSet rs = stmt.executeQuery("SELECT name FROM users WHERE id = " + userId);
+            String name = rs.next() ? rs.getString("name") : null;
+            conn.close();
+            return name.trim();
+        } catch (Exception e) {
             return "";
         }
     }

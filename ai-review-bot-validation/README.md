@@ -38,7 +38,7 @@ The workflow uses the built-in `GITHUB_TOKEN`; the job has `pull-requests: write
 ### 3. Open a Pull Request
 
 - Create a branch: `git checkout -b feature/sample-change`
-- Make a small code change (e.g. edit `src/services/calculator.py` or add a file).
+- Make a small code change (e.g. edit a file in `review/` or add any file).
 - Push and open a PR against `main`.
 
 ### 4. Verify the flow
@@ -50,7 +50,7 @@ The workflow uses the built-in `GITHUB_TOKEN`; the job has `pull-requests: write
 ## Project layout (this repo)
 
 - **Repository root** (parent of this folder): `.github/workflows/`, `scripts/run_ai_review.py`, `requirements.txt`, `STYLE_GUIDE.md`, `docs/` (architecture + anti-patterns), **`ai-review.config.json`** (optional bot configuration).
-- **This folder** (`ai-review-bot-validation/`): `src/` (sample app for the bot to review), `review/` (sample Java), this README.
+- **This folder** (`ai-review-bot-validation/`): `review/` (sample code for the bot to review), this README.
 
 ## Configuration (per-project)
 
