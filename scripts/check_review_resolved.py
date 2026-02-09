@@ -42,7 +42,8 @@ def get_pr_number() -> int | None:
     return None
 
 
-def fetch_unresolved_count(token: str, repo: str, pr_number: int, graphql_url: str) -> int:
+def fetch_thread_counts(token: str, repo: str, pr_number: int, graphql_url: str) -> tuple[int, int]:
+    """Return (total_threads, unresolved_count)."""
     owner, repo_name = repo.split("/", 1)
     query = """
     query($owner: String!, $name: String!, $number: Int!, $after: String) {
@@ -56,7 +57,8 @@ def fetch_unresolved_count(token: str, repo: str, pr_number: int, graphql_url: s
       }
     }
     """
-    total = 0
+    total_threads = 0
+    unresolved = 0
     cursor = None
     while True:
         variables = {"owner": owner, "name": repo_name, "number": pr_number, "after": cursor}
@@ -82,14 +84,15 @@ def fetch_unresolved_count(token: str, repo: str, pr_number: int, graphql_url: s
         threads = (pr_node.get("reviewThreads") or {}).get("nodes") or []
         page_info = (pr_node.get("reviewThreads") or {}).get("pageInfo") or {}
         for node in threads:
+            total_threads += 1
             if node.get("isResolved") is False:
-                total += 1
+                unresolved += 1
         if not page_info.get("hasNextPage"):
             break
         cursor = page_info.get("endCursor")
         if not cursor:
             break
-    return total
+    return total_threads, unresolved
 
 
 def main() -> int:
@@ -105,15 +108,16 @@ def main() -> int:
 
     graphql_url = get_graphql_url()
     try:
-        unresolved = fetch_unresolved_count(token, repo, pr_number, graphql_url)
+        total_threads, unresolved = fetch_thread_counts(token, repo, pr_number, graphql_url)
     except Exception as e:
         print(f"Failed to check review threads: {e}", file=sys.stderr)
         return 2
 
+    print(f"Review threads: {total_threads} total, {unresolved} unresolved.", file=sys.stderr)
     if unresolved > 0:
         print(
             f"Unresolved review conversations: {unresolved}. "
-            "Resolve all PR review comment threads before merging.",
+            "Resolve all PR review comment threads (Files changed → resolve each thread).",
             file=sys.stderr,
         )
         return 1

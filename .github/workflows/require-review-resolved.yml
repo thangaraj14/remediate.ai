@@ -1,14 +1,24 @@
 # Require all PR review conversations to be resolved before merge.
-# This check fails until every review comment thread (including AI-Review-Bot) is resolved.
+# Runs on: PR activity (open/sync/reopen), and any comment on the PR (conversation or inline).
+# Note: GitHub does not emit an event when a conversation is "resolved" (button only).
+# So the check re-runs when someone comments or pushes; after resolving, a new comment or push will re-run it.
 name: Require review resolved
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created, edited]
+  pull_request_review_comment:
+    types: [created, edited]
 
 jobs:
   check-resolved:
     runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request != null) ||
+      github.event_name == 'pull_request_review_comment'
     permissions:
       pull-requests: read
     steps:
@@ -27,5 +37,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
         run: python scripts/check_review_resolved.py
