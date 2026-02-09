@@ -3,7 +3,7 @@ package review;
 import java.sql.*;
 import java.util.Optional;
 
-public class OrderService {
+public class OrderFulfillmentService {
 
     private static final String JDBC_URL = "jdbc:postgresql://prod-db.internal:5432/orders";
     private static final String USER = "app_user";
