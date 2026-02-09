@@ -1,4 +1,5 @@
 # AI Review Bot: run on every PR and post inline comments + executive summary.
+# Then run "Require review resolved" so the check runs after the bot posts (fails until all threads resolved).
 # Requires: Settings → Secrets → GOOGLE_API_KEY (optional; if missing, script can exit or dry-run).
 name: AI Review Bot
 
@@ -40,3 +41,27 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: python scripts/run_ai_review.py
+
+  check-resolved:
+    runs-on: ubuntu-latest
+    needs: [ai-review]
+    permissions:
+      pull-requests: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Check review conversations resolved
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: python scripts/check_review_resolved.py
