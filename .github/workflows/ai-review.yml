@@ -45,6 +45,7 @@ jobs:
   check-resolved:
     runs-on: ubuntu-latest
     needs: [ai-review]
+    if: always() && (needs.ai-review.result == 'success' || needs.ai-review.result == 'failure')
     permissions:
       pull-requests: read
     steps:
