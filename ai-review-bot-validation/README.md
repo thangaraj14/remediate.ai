@@ -1,6 +1,8 @@
 # AI-Review-Bot Validation Project
 
-This repository is a **validation harness** for the AI-Review-Bot—an agentic automation layer that integrates into the GitHub CI/CD pipeline. It uses the [Agno](https://agno.com) framework with Gemini to provide contextual, high-reasoning feedback on every Pull Request.
+This folder is a **validation harness** for the AI-Review-Bot—an agentic automation layer that integrates into the GitHub CI/CD pipeline. It uses the [Agno](https://agno.com) framework with Gemini to provide contextual, high-reasoning feedback on every Pull Request.
+
+**In this repo**, the bot lives at **repository root**: workflow `.github/workflows/ai-review.yml`, `scripts/run_ai_review.py`, `requirements.txt`, `STYLE_GUIDE.md`, and `docs/` are at the parent directory. This folder holds only the validation sample code and this README.
 
 ## Executive Summary
 
@@ -45,26 +47,20 @@ The workflow uses the built-in `GITHUB_TOKEN`; the job has `pull-requests: write
 2. **Inline comments**: After the run, review the **Files changed** tab for inline comments from the bot.
 3. **Summary comment**: Check the PR **Conversation** for a single comment with the executive summary (Consistency, Quality, Security).
 
-## Project layout
+## Project layout (this repo)
 
-```
-.github/workflows/   # AI Review workflow (trigger, diff, run script, post feedback)
-docs/                # Architecture checklist, anti-patterns
-src/                 # Sample app (intentional patterns for the bot to review)
-scripts/             # Agno-based review runner and GitHub API poster
-STYLE_GUIDE.md       # Team style context injected into the agent
-```
+- **Repository root** (parent of this folder): `.github/workflows/`, `scripts/run_ai_review.py`, `requirements.txt`, `STYLE_GUIDE.md`, `docs/` (architecture + anti-patterns).
+- **This folder** (`ai-review-bot-validation/`): `src/` (sample app for the bot to review), `review/` (sample Java), this README.
 
 ## Local run (optional)
 
-To test the review script without GitHub:
+From the **repository root** (parent of this folder):
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate   # or .venv\Scripts\activate on Windows
 pip install -r requirements.txt
 export GOOGLE_API_KEY=your_key
-# Provide diff via file or stdin
 git diff main...HEAD > /tmp/pr.diff
 PR_DIFF_FILE=/tmp/pr.diff python scripts/run_ai_review.py --dry-run
 ```
@@ -79,14 +75,14 @@ PR_DIFF_FILE=/tmp/pr.diff python scripts/run_ai_review.py --dry-run
 If the workflow runs but no inline/summary comments are posted, check:
 
 1. **Workflow is in this repo**  
-   The AI Review Bot only runs when `.github/workflows/ai-review.yml` is in the **same repo** as the PR. If you opened a PR in a different repo (e.g. `remediate.ai`), copy this workflow plus `scripts/`, `requirements.txt`, and optional `STYLE_GUIDE.md` / `docs/` into that repo.
+   The AI Review Bot only runs when `.github/workflows/ai-review.yml` is in the **same repo** as the PR. In this repo the workflow and `scripts/run_ai_review.py`, `requirements.txt`, `STYLE_GUIDE.md`, and `docs/` live at the repository root.
 
 2. **GOOGLE_API_KEY is set**  
    In the PR’s **Actions** tab, open the “AI Review Bot” run. If you see  
    `::error::GOOGLE_API_KEY is not set...`, add the secret in **Settings → Secrets and variables → Actions** and re-run the workflow (or push a small commit).
 
 3. **Workflow ran from the PR branch**  
-   The workflow runs from the branch that has the PR. Ensure that branch contains `.github/workflows/ai-review.yml` (and `scripts/run_ai_review.py`, `requirements.txt`). If the workflow was only added on `main` after the PR was opened, push a commit to the PR branch or re-run the workflow.
+   The workflow runs from the branch that has the PR. Ensure that branch contains `.github/workflows/ai-review.yml` and the root `scripts/run_ai_review.py` and `requirements.txt`. If the workflow was only added on `main` after the PR was opened, push a commit to the PR branch or re-run the workflow.
 
 4. **GitHub Enterprise**  
    The script uses `GITHUB_API_URL` (set in the workflow from `github.server_url`). If you use a different API base, set `GITHUB_API_URL` in the workflow env.
