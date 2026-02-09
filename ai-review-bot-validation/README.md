@@ -89,13 +89,26 @@ If the workflow runs but no inline/summary comments are posted, check:
 
 ## Ensuring review comments get resolved
 
-**In-repo check (code):** The workflow **Require review resolved** (`.github/workflows/require-review-resolved.yml`) runs on every PR and calls `scripts/check_review_resolved.py`, which uses the GitHub GraphQL API to count unresolved review threads. If any exist, the job fails. The workflow is triggered automatically on PR open/sync/reopen and on **any new comment** (conversation or inline), so after you resolve all threads, adding a short comment (e.g. “Resolved”) or pushing a commit will re-run the check and it will pass. (GitHub does not emit an event for the “Resolve conversation” button alone.) To block merge, add **Require review resolved** as a required status check in **Settings** → **Branches** → branch protection.
+**In-repo check (code):** The **Require review resolved** check runs after the AI Review Bot (in the same workflow) and fails until all review threads are resolved. It uses `scripts/check_review_resolved.py` and the GitHub GraphQL API.
 
-1. **Resolving the bot’s comments**  
-   Authors or reviewers open the **Files changed** tab, find each AI comment thread, then either fix the code and **Resolve conversation**, or reply (e.g. “Won’t fix”) and **Resolve conversation**. Once all are resolved, the “Require review resolved” check passes.
+**How to get the check to re-run and turn green after you resolve all comments**
 
-2. **Branch protection (optional)**  
-   For an extra gate at merge time, enable **Require conversation resolution before merging** in **Settings** → **Branches** (or in Rulesets). That blocks merge in the UI; the workflow above blocks merge via a required status check.
+GitHub does not send any event when you click “Resolve conversation”, so the check will not re-run by itself. Use one of these:
+
+1. **Push a commit (recommended)**  
+   After resolving all threads, push any commit to the PR branch (e.g. `git commit --allow-empty -m "Resolved review comments" && git push`). The **Require review resolved** workflow runs on **push** for branches that have an open PR; the run is attached to your commit, so the check **appears and updates on the PR**. If all threads are resolved, the check passes.
+
+2. **Manual re-run from Actions**  
+   Go to **Actions** → **Require review resolved** → **Run workflow**. Choose the **PR branch** (e.g. `test-pr-10`) from the dropdown, enter the **PR number** (e.g. `11`), then click **Run workflow**. The run is for that branch, so the check shows on the PR.
+
+3. **Add a comment**  
+   Adding a comment on the PR (or replying to a review comment) also triggers the workflow, but runs triggered by comments are tied to the default branch, so the result **may not appear as a status check on the PR**. Prefer (1) or (2) if you need the check to update on the PR.
+
+**Resolving the bot’s comments**  
+Open the **Files changed** tab, find each AI comment thread, then fix the code and **Resolve conversation**, or reply (e.g. “Won’t fix”) and **Resolve conversation**. Then use (1) or (2) above to re-run the check.
+
+**Branch protection (optional)**  
+To block merge until the check passes, add **Require review resolved** (or the **check-resolved** job) as a required status check in **Settings** → **Branches** → branch protection.
 
 ## Validation checklist
 

@@ -1,36 +1,70 @@
-# Re-run "review resolved" check when someone comments on the PR (after resolving, add a comment to refresh the check).
-# The main check runs after AI Review Bot in .github/workflows/ai-review.yml (job check-resolved).
+# Require review resolved: re-runs so the check updates on the PR when you:
+# - Push any commit (after resolving) → run is for your branch → check shows on PR
+# - Comment on the PR → run may not show on PR (GitHub limitation)
+# - Manually: Actions → "Require review resolved" → Run workflow → choose PR branch, enter PR number
 name: Require review resolved
 
 on:
+  push:
+    branches: ['**']
   issue_comment:
     types: [created, edited]
   pull_request_review_comment:
     types: [created, edited]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number (required for manual run)'
+        required: true
+        type: number
 
 jobs:
   check-resolved:
     runs-on: ubuntu-latest
-    if: |
-      (github.event_name == 'issue_comment' && github.event.issue.pull_request != null) ||
-      github.event_name == 'pull_request_review_comment'
     permissions:
       pull-requests: read
     steps:
+      - name: Get PR number (push)
+        id: pr_push
+        if: github.event_name == 'push'
+        run: |
+          pr=$(gh pr list --head "${{ github.ref_name }}" --state open --json number -q '.[0].number // empty')
+          echo "number=$pr" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get PR number (comment or manual)
+        id: pr_other
+        if: github.event_name != 'push'
+        run: |
+          if [ "${{ github.event_name }}" = "issue_comment" ] && [ -z "${{ github.event.issue.pull_request }}" ]; then
+            echo "number=" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "issue_comment" ]; then
+            echo "number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "pull_request_review_comment" ]; then
+            echo "number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          else
+            echo "number=${{ github.event.inputs.pr_number }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Checkout repository
+        if: steps.pr_push.outputs.number != '' || steps.pr_other.outputs.number != ''
         uses: actions/checkout@v4
 
       - name: Set up Python
+        if: steps.pr_push.outputs.number != '' || steps.pr_other.outputs.number != ''
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Install dependencies
+        if: steps.pr_push.outputs.number != '' || steps.pr_other.outputs.number != ''
         run: pip install requests
 
       - name: Check review conversations resolved
+        if: steps.pr_push.outputs.number != '' || steps.pr_other.outputs.number != ''
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+          PR_NUMBER: ${{ steps.pr_push.outputs.number || steps.pr_other.outputs.number }}
         run: python scripts/check_review_resolved.py
