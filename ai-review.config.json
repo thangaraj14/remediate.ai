@@ -1,0 +1,12 @@
+{
+  "_comment": "Optional. Edit to tune the AI Review Bot per project. See ai-review-bot-validation/README.md#configuration.",
+  "max_inline_comments": 5,
+  "allow_good_to_have_inline": false,
+  "summary_grades": ["Consistency", "Quality", "Security"],
+  "max_required_in_summary": 3,
+  "max_good_to_have_in_summary": 3,
+  "required_description": "Must-fix items (bugs, security issues, critical style/architecture violations, logic errors).",
+  "good_to_have_description": "Optional improvements (readability, minor style, refactors).",
+  "custom_instructions": "",
+  "model": ""
+}

@@ -1,3 +1,0 @@
-# AI-Review-Bot validation: Agno + Gemini + GitHub
-agno[google]>=2.4.0
-requests>=2.28.0
