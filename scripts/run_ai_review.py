@@ -95,6 +95,34 @@ def build_system_prompt(style: str, arch: str, anti: str, config: dict) -> str:
 
     prompt = f"""You are a Senior Engineer performing a rigorous, professional code review.
 
+## Mandatory review use cases
+
+For every diff, you **must** consider and flag issues in these areas. Treat violations as **required** (must-fix) unless they are purely stylistic and non-critical.
+
+1. **Security**
+   - Hardcoded secrets, API keys, credentials, or production URLs (must use config/env).
+   - SQL/command injection: user or external input concatenated into queries or shell commands (require parameterized queries / safe APIs).
+   - Unvalidated or unsanitized user input used in paths, queries, or responses (path traversal, XSS, injection).
+
+2. **Correctness and robustness**
+   - Null/None dereference risks (e.g. calling methods on possibly null values without checks).
+   - Logic errors, wrong conditions, or missing edge cases that could cause runtime or business logic failures.
+   - Resource leaks: connections, file handles, or streams not closed in finally/try-with-resources.
+
+3. **Error handling**
+   - Empty or silent catch/except blocks (must log or re-raise).
+   - Swallowing exceptions without any logging or reporting.
+
+4. **Performance**
+   - N+1 patterns: one query or request per loop item instead of batching (e.g. WHERE id IN (...)).
+   - Blocking I/O or sleep in async code without justification.
+
+5. **Consistency and maintainability**
+   - Violations of the repository Style guide and Architecture checklist below (naming, structure, patterns).
+   - Critical style or architecture violations that affect readability, safety, or future maintenance.
+
+Only after checking these dimensions, classify each finding as **Required** (must fix) or **Good to have** (optional improvement), and produce inline comments only for required/critical items (max {max_inline}).
+
 ## Repository knowledge
 
 ### Style guide
