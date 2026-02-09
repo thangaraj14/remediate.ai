@@ -17,10 +17,13 @@ from pathlib import Path
 # Repository root (script lives in scripts/)
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# Default config (used when ai-review.config.json is missing or invalid)
+# Default config (used when ai-review.config.json is missing or invalid).
+# See README.md#configuration and ai-review.config.example.json for all options.
 DEFAULT_CONFIG = {
     "max_inline_comments": 5,
     "allow_good_to_have_inline": False,
+    "post_inline_comments": True,
+    "diff_max_lines": 0,
     "summary_grades": ["Consistency", "Quality", "Security"],
     "max_required_in_summary": 3,
     "max_good_to_have_in_summary": 3,
@@ -365,6 +368,13 @@ def main() -> None:
         sys.exit(1)
 
     config = load_config()
+    diff_max_lines = int(config.get("diff_max_lines") or 0)
+    if diff_max_lines > 0:
+        lines = diff.splitlines()
+        if len(lines) > diff_max_lines:
+            diff = "\n".join(lines[:diff_max_lines]) + "\n\n... (diff truncated by diff_max_lines)\n"
+            print(f"Diff truncated to {diff_max_lines} lines (diff_max_lines).", file=sys.stderr)
+
     style, arch, anti = load_context()
     print("Running Agno agent (Gemini)...", file=sys.stderr)
     raw = run_agent(diff, style, arch, anti, config)
@@ -395,6 +405,9 @@ def main() -> None:
     max_inline = int(config.get("max_inline_comments", 5))
     if len(inline) > max_inline:
         inline = inline[:max_inline]
+    post_inline = config.get("post_inline_comments", True)
+    if not post_inline:
+        inline = []
     post_to_github(inline, summary, repo, int(pr_number), head_sha, token)
     print("Done.")
 
