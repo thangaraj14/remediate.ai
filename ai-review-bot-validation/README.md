@@ -49,8 +49,37 @@ The workflow uses the built-in `GITHUB_TOKEN`; the job has `pull-requests: write
 
 ## Project layout (this repo)
 
-- **Repository root** (parent of this folder): `.github/workflows/`, `scripts/run_ai_review.py`, `requirements.txt`, `STYLE_GUIDE.md`, `docs/` (architecture + anti-patterns).
+- **Repository root** (parent of this folder): `.github/workflows/`, `scripts/run_ai_review.py`, `requirements.txt`, `STYLE_GUIDE.md`, `docs/` (architecture + anti-patterns), **`ai-review.config.json`** (optional bot configuration).
 - **This folder** (`ai-review-bot-validation/`): `src/` (sample app for the bot to review), `review/` (sample Java), this README.
+
+## Configuration (per-project)
+
+Admins can tune the AI Review Bot per repo by editing **`ai-review.config.json`** at the repository root. Omit the file to use defaults. This makes the template reusable across multiple projects.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `max_inline_comments` | `5` | Maximum number of inline comments to post on the PR. |
+| `allow_good_to_have_inline` | `false` | If `true`, the bot may post some "good to have" suggestions as inline comments (not only in the summary). |
+| `summary_grades` | `["Consistency", "Quality", "Security"]` | Dimensions to grade in the executive summary (e.g. add "Performance", "Tests"). |
+| `max_required_in_summary` | `3` | Max bullets for "Required changes" in the summary. |
+| `max_good_to_have_in_summary` | `3` | Max bullets for "Good to have" in the summary. |
+| `required_description` | *(see below)* | Short description of what counts as "required" (injected into the prompt). |
+| `good_to_have_description` | *(see below)* | Short description of what counts as "good to have". |
+| `custom_instructions` | `""` | Optional extra instructions appended to the prompt (project-specific rules). |
+| `model` | `""` | Gemini model id (e.g. `gemini-2.5-flash`). Empty = use env `GEMINI_MODEL` or default. |
+
+Example `ai-review.config.json` for a stricter project:
+
+```json
+{
+  "max_inline_comments": 3,
+  "allow_good_to_have_inline": false,
+  "summary_grades": ["Consistency", "Quality", "Security", "Tests"],
+  "max_required_in_summary": 5,
+  "max_good_to_have_in_summary": 3,
+  "custom_instructions": "Focus on security and dependency hygiene. Flag any new external API calls."
+}
+```
 
 ## Local run (optional)
 
@@ -86,29 +115,6 @@ If the workflow runs but no inline/summary comments are posted, check:
 
 4. **GitHub Enterprise**  
    The script uses `GITHUB_API_URL` (set in the workflow from `github.server_url`). If you use a different API base, set `GITHUB_API_URL` in the workflow env.
-
-## Ensuring review comments get resolved
-
-**In-repo check (code):** The **Require review resolved** check runs after the AI Review Bot (in the same workflow) and fails until all review threads are resolved. It uses `scripts/check_review_resolved.py` and the GitHub GraphQL API.
-
-**How to get the check to re-run and turn green after you resolve all comments**
-
-GitHub does not send any event when you click “Resolve conversation”, so the check will not re-run by itself. Use one of these:
-
-1. **Push a commit (recommended)**  
-   After resolving all threads, push any commit to the PR branch (e.g. `git commit --allow-empty -m "Resolved review comments" && git push`). The **Require review resolved** workflow runs on **push** for branches that have an open PR; the run is attached to your commit, so the check **appears and updates on the PR**. If all threads are resolved, the check passes.
-
-2. **Manual re-run from Actions**  
-   Go to **Actions** → **Require review resolved** → **Run workflow**. Choose the **PR branch** (e.g. `test-pr-10`) from the dropdown, enter the **PR number** (e.g. `11`), then click **Run workflow**. The run is for that branch, so the check shows on the PR.
-
-3. **Add a comment**  
-   Adding a comment on the PR (or replying to a review comment) also triggers the workflow, but runs triggered by comments are tied to the default branch, so the result **may not appear as a status check on the PR**. Prefer (1) or (2) if you need the check to update on the PR.
-
-**Resolving the bot’s comments**  
-Open the **Files changed** tab, find each AI comment thread, then fix the code and **Resolve conversation**, or reply (e.g. “Won’t fix”) and **Resolve conversation**. Then use (1) or (2) above to re-run the check.
-
-**Branch protection (optional)**  
-To block merge until the check passes, add **Require review resolved** (or the **check-resolved** job) as a required status check in **Settings** → **Branches** → branch protection.
 
 ## Validation checklist
 

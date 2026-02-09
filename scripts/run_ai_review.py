@@ -17,6 +17,36 @@ from pathlib import Path
 # Repository root (script lives in scripts/)
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+# Default config (used when ai-review.config.json is missing or invalid)
+DEFAULT_CONFIG = {
+    "max_inline_comments": 5,
+    "allow_good_to_have_inline": False,
+    "summary_grades": ["Consistency", "Quality", "Security"],
+    "max_required_in_summary": 3,
+    "max_good_to_have_in_summary": 3,
+    "required_description": "Must-fix items (bugs, security issues, critical style/architecture violations, logic errors).",
+    "good_to_have_description": "Optional improvements (readability, minor style, refactors).",
+    "custom_instructions": "",
+    "model": "",
+}
+
+
+def load_config() -> dict:
+    """Load ai-review.config.json from repo root; merge with defaults."""
+    config_path = REPO_ROOT / "ai-review.config.json"
+    out = dict(DEFAULT_CONFIG)
+    if not config_path.exists():
+        return out
+    try:
+        data = json.loads(config_path.read_text())
+        if isinstance(data, dict):
+            for k, v in data.items():
+                if k in out and v is not None:
+                    out[k] = v
+    except (json.JSONDecodeError, OSError):
+        pass
+    return out
+
 
 def load_diff() -> str:
     """Load PR diff from file or stdin."""
@@ -40,9 +70,30 @@ def load_context() -> tuple[str, str, str]:
     return style, arch, anti
 
 
-def build_system_prompt(style: str, arch: str, anti: str) -> str:
-    """Build the Senior Engineer persona and repository knowledge."""
-    return f"""You are a Senior Engineer performing a rigorous, professional code review.
+def build_system_prompt(style: str, arch: str, anti: str, config: dict) -> str:
+    """Build the Senior Engineer persona and repository knowledge from config."""
+    max_inline = int(config.get("max_inline_comments", 5))
+    allow_good_inline = config.get("allow_good_to_have_inline", False)
+    grades = config.get("summary_grades") or ["Consistency", "Quality", "Security"]
+    max_req = int(config.get("max_required_in_summary", 3))
+    max_good = int(config.get("max_good_to_have_in_summary", 3))
+    req_desc = config.get("required_description", DEFAULT_CONFIG["required_description"])
+    good_desc = config.get("good_to_have_description", DEFAULT_CONFIG["good_to_have_description"])
+    grades_str = ", ".join(grades)
+    custom = (config.get("custom_instructions") or "").strip()
+
+    inline_rule = (
+        f"Produce up to {max_inline} **inline comments** only for **required** findings"
+        if not allow_good_inline
+        else f"Produce up to {max_inline} **inline comments** for **required** findings; you may also include **good to have** as inline if they are high value"
+    )
+    good_rule = (
+        "Do **not** post good-to-have as inline comments; list them only in the summary."
+        if not allow_good_inline
+        else "You may post a few good-to-have as inline if especially useful; otherwise list in the summary."
+    )
+
+    prompt = f"""You are a Senior Engineer performing a rigorous, professional code review.
 
 ## Repository knowledge
 
@@ -57,15 +108,15 @@ def build_system_prompt(style: str, arch: str, anti: str) -> str:
 
 ## Your task
 Review the provided git diff. Classify findings into:
-- **Required changes**: Must-fix items (bugs, security issues, critical style/architecture violations, logic errors). These may be posted as inline comments.
-- **Good to have**: Optional improvements (readability, minor style, refactors). Do **not** post these as inline comments; list them only in the summary.
+- **Required changes**: {req_desc} These may be posted as inline comments.
+- **Good to have**: {good_desc} {good_rule}
 
-Be selective—do not pollute the PR with excessive suggestions. Reserve inline comments for required/critical findings only (max 5). Put good-to-have items only in the summary.
+Be selective—do not pollute the PR with excessive suggestions. Reserve inline comments for required/critical findings only (max {max_inline}). Put good-to-have items only in the summary unless otherwise allowed.
 
-1. Produce up to 5 **inline comments** only for **required** findings: file path (as in the diff), line number (in the new file), short actionable comment. Be specific and suggest a fix when possible.
+1. {inline_rule}: file path (as in the diff), line number (in the new file), short actionable comment. Be specific and suggest a fix when possible.
 2. Produce one **executive summary** that:
-   - Grades the change on: Consistency, Quality, Security (use: Good / Needs improvement / Critical).
-   - Lists **Required changes** (must fix) and **Good to have** (optional), each as a short bullet list (top 3 each at most).
+   - Grades the change on: {grades_str} (use: Good / Needs improvement / Critical).
+   - Lists **Required changes** (must fix) and **Good to have** (optional), each as a short bullet list (top {max_req} required, top {max_good} good-to-have at most).
 
 **Output format:** Reply with ONLY a single JSON object. No markdown code fences (no ```), no explanation before or after. The "summary" field MUST be a non-empty string with grades plus "Required changes" and "Good to have" sections.
 {{
@@ -76,9 +127,12 @@ Be selective—do not pollute the PR with excessive suggestions. Reserve inline 
 }}
 If there are no inline comments, use "inline_comments": [].
 Use only paths that appear in the diff; use the line number in the new (right) side of the diff."""
+    if custom:
+        prompt += f"\n\n## Additional instructions (project-specific)\n{custom}"
+    return prompt
 
 
-def run_agent(diff: str, style: str, arch: str, anti: str) -> str:
+def run_agent(diff: str, style: str, arch: str, anti: str, config: dict) -> str:
     """Run Agno agent with Gemini and return raw response."""
     try:
         from agno.agent import Agent
@@ -89,11 +143,10 @@ def run_agent(diff: str, style: str, arch: str, anti: str) -> str:
     if not os.environ.get("GOOGLE_API_KEY"):
         sys.exit("Set GOOGLE_API_KEY to run the review agent.")
 
-    # Default to a current stable model (gemini-1.5-flash is deprecated / not found in v1beta)
-    model_id = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+    model_id = (config.get("model") or os.environ.get("GEMINI_MODEL") or "gemini-2.5-flash").strip() or "gemini-2.5-flash"
     agent = Agent(
         model=Gemini(id=model_id),
-        instructions=build_system_prompt(style, arch, anti),
+        instructions=build_system_prompt(style, arch, anti, config),
         markdown=False,
     )
     user_message = f"Review this git diff and respond with the JSON object only.\n\n```diff\n{diff}\n```"
@@ -239,9 +292,10 @@ def main() -> None:
         print("No diff provided. Set PR_DIFF_FILE or pipe a diff to stdin.", file=sys.stderr)
         sys.exit(1)
 
+    config = load_config()
     style, arch, anti = load_context()
     print("Running Agno agent (Gemini)...", file=sys.stderr)
-    raw = run_agent(diff, style, arch, anti)
+    raw = run_agent(diff, style, arch, anti, config)
     data = parse_json_response(raw)
 
     inline = data.get("inline_comments") or []
@@ -266,6 +320,9 @@ def main() -> None:
         print(json.dumps({"inline_comments": inline, "summary": summary}, indent=2))
         sys.exit(0)
 
+    max_inline = int(config.get("max_inline_comments", 5))
+    if len(inline) > max_inline:
+        inline = inline[:max_inline]
     post_to_github(inline, summary, repo, int(pr_number), head_sha, token)
     print("Done.")
 
