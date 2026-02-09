@@ -1,0 +1,29 @@
+type Query {
+  user(id: ID!): User
+  users: [User!]!
+  orders: [Order!]!
+}
+
+type User {
+  id: ID!
+  email: String!
+  password: String!
+  apiToken: String!
+  orders: [Order!]!
+  created_at: String!
+}
+
+type Order {
+  id: ID!
+  total: Float!
+  userId: String!
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+extend type User {
+  role: Role!
+}

@@ -1,6 +1,5 @@
 {
   "_comment": "Optional. See README.md#configuration.",
-  "review_scope": "all",
   "max_inline_comments": 5,
   "allow_good_to_have_inline": false,
   "post_inline_comments": true,

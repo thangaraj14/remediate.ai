@@ -28,7 +28,7 @@ This document describes the **AI-Review-Bot**: an automated, agentic code review
 | Aspect | Description |
 |--------|-------------|
 | **Trigger** | `pull_request` (opened, synchronize, reopened) → GitHub Action runs. |
-| **Context** | Full checkout + `git diff` of the PR (base ref...HEAD). Optionally only **new files** (see [Configuration](#configuration)). |
+| **Context** | Full checkout + `git diff` of the PR (base ref...HEAD). |
 | **Brain** | Agno Agent with a **Senior Engineer** persona + repository knowledge: `STYLE_GUIDE.md`, `docs/ARCHITECTURE_IMPROVEMENTS.md`, `docs/ANTI_PATTERNS.md`. |
 | **Model** | Gemini (default: `gemini-2.5-flash`; configurable via `ai-review.config.json` or `GEMINI_MODEL`). |
 | **Output** | **Inline comments** on the diff (file + line) + **one executive summary comment** on the PR (grades + Required changes + Good to have). |
@@ -74,8 +74,8 @@ flowchart LR
 **Component roles:**
 
 - **Workflow** (`ai-review.yml`): Checkout, generate PR diff, set env vars, run the Python script.
-- **Script** (`run_ai_review.py`): Load diff + config + repo context (style, architecture, anti-patterns), optionally filter to new files only, call Agno agent with Gemini, parse JSON response, post inline comments and summary to the PR.
-- **Config** (`ai-review.config.json`): Optional; review scope (all vs new files only), caps inline comments, summary grades, custom instructions, model id.
+- **Script** (`run_ai_review.py`): Load diff + config + repo context (style, architecture, anti-patterns), call Agno agent with Gemini, parse JSON response, post inline comments and summary to the PR.
+- **Config** (`ai-review.config.json`): Optional; caps inline comments, summary grades, custom instructions, model id.
 - **Context docs**: Injected into the agent prompt so reviews align with your standards.
 
 ---
@@ -98,7 +98,7 @@ sequenceDiagram
     Action->>Action: pip install -r requirements.txt
     Action->>Action: git diff origin/base...HEAD > pr.diff
     Action->>Script: Run script (PR_DIFF_FILE, GITHUB_*, GOOGLE_API_KEY)
-    Script->>Script: Load diff, config; optionally filter to new files only
+    Script->>Script: Load diff, config, STYLE_GUIDE, docs/
     Script->>Agno: Agent.run(diff) with system prompt
     Agno->>Gemini: API call (review diff)
     Gemini-->>Agno: JSON (inline_comments + summary)
@@ -164,6 +164,7 @@ The **`ai-review-bot-validation/review/`** folder contains **intentionally flawe
 | **`OrderService.java`** | Orders and idempotency. | Resource leak; logic bug (wrong comparison); broad `catch` with no logging; **NPE** (`getOrderStatusLower`: .toLowerCase() on null); **SQL performance** (`getOrderStatus`: SELECT * for one column); **missing tests** (`isOrderFulfillable`). |
 | **`report_service.rb`** | Rails-style report generation. | Hardcoded API key and prod webhook URL; SQL injection; path traversal; bare `rescue`; N+1 in `generate_user_report`; **loop not closed**: `concat_export_contents` opens `File` in loop but never closes; **SQL performance** (`active_users_slow`: SELECT *, LOWER on column). |
 | **`PaymentRepository.scala`** | Payment data access. | Hardcoded JDBC URL and credentials; SQL injection; resource leak in `findByTransactionId` and `updateStatus`; empty catch; **SQL performance** (`allStatuses`: SELECT * when only status needed). |
+| **`schema.graphql`** | GraphQL API schema. | Sensitive fields exposed on `User` (`password`, `apiToken`); unbounded lists `users`/`orders` with no pagination (DoS/overfetch risk); inconsistent naming (`created_at` vs camelCase convention). |
 
 When you add or change these files in a branch and open a PR, the bot will post inline comments on the problematic lines and an executive summary with grades (e.g. Consistency, Quality, Security) plus “Required changes” and “Good to have” bullets.
 
@@ -223,7 +224,6 @@ Admins can tune the bot per repo by editing **`ai-review.config.json`** at the r
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `review_scope` | `"all"` | **`"all"`**: Review the full PR diff (new and modified files); post comments on any file. **`"new_files_only"`**: Only files **new** in the PR. **`"existing_files_only"`**: Only **modified** (existing) files; ignore new files. |
 | `max_inline_comments` | `5` | Maximum number of inline comments to post on the PR. |
 | `allow_good_to_have_inline` | `false` | If `true`, the bot may post some “good to have” suggestions as inline comments. |
 | `post_inline_comments` | `true` | If `false`, only the executive summary is posted; no inline comments on the diff. |
@@ -235,14 +235,6 @@ Admins can tune the bot per repo by editing **`ai-review.config.json`** at the r
 | `good_to_have_description` | *(in script)* | Short description of what counts as “good to have”. |
 | `custom_instructions` | `""` | Optional extra instructions appended to the prompt (project-specific). |
 | `model` | `""` | Gemini model id (e.g. `gemini-2.5-flash`). Empty = use env `GEMINI_MODEL` or default. |
-
-Example for reviewing only new files:
-
-```json
-{
-  "review_scope": "new_files_only"
-}
-```
 
 Example for a stricter project:
 
@@ -300,12 +292,6 @@ Output: inline comments and summary printed to stdout; nothing is posted to the 
 
 4. **GitHub Enterprise**  
    The script uses `GITHUB_API_URL` (from `github.server_url` in the workflow). If you use a different API base, set `GITHUB_API_URL` in the workflow env.
-
-5. **review_scope is new_files_only and PR has no new files**  
-   If the diff is empty after filtering to new files only, the script will exit with a message. Open a PR that adds at least one new file, or set `review_scope` to `"all"`.
-
-6. **With `review_scope` "all", no comments on existing (modified) files**  
-   The agent is instructed to review **every file** in the diff (new and modified) and to post inline comments on any file with required issues. Ensure `review_scope` is `"all"` in `ai-review.config.json`. To review only modified files and skip new ones, set `review_scope` to `"existing_files_only"`.
 
 ---
 
