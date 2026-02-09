@@ -19,6 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Default config (used when ai-review.config.json is missing or invalid)
 DEFAULT_CONFIG = {
+    "review_scope": "all",
     "max_inline_comments": 5,
     "allow_good_to_have_inline": False,
     "summary_grades": ["Consistency", "Quality", "Security"],
@@ -56,6 +57,43 @@ def load_diff() -> str:
     if not sys.stdin.isatty():
         return sys.stdin.read()
     return ""
+
+
+def filter_diff_to_new_files_only(diff: str) -> str:
+    """Keep only hunks for files that are newly added in the PR (old path is /dev/null)."""
+    if not diff.strip():
+        return ""
+    lines = diff.splitlines(keepends=True)
+    out: list[str] = []
+    in_new_file_section = False
+    section_buffer: list[str] = []
+
+    def flush_section(keep: bool) -> None:
+        nonlocal section_buffer
+        if keep:
+            out.extend(section_buffer)
+        section_buffer = []
+
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if line.startswith("diff --git "):
+            flush_section(in_new_file_section)
+            section_buffer = [line]
+            in_new_file_section = False
+            i += 1
+            while i < len(lines) and not lines[i].startswith("diff --git "):
+                section_buffer.append(lines[i])
+                if lines[i].startswith("--- ") and ("/dev/null" in lines[i] or "null" in lines[i]):
+                    in_new_file_section = True
+                if lines[i].strip() == "new file mode 100644" or lines[i].strip() == "new file mode 100755":
+                    in_new_file_section = True
+                i += 1
+            flush_section(in_new_file_section)
+            continue
+        i += 1
+    flush_section(in_new_file_section)
+    return "".join(out)
 
 
 def load_context() -> tuple[str, str, str]:
@@ -365,6 +403,14 @@ def main() -> None:
         sys.exit(1)
 
     config = load_config()
+    review_scope = (config.get("review_scope") or "all").strip().lower()
+    if review_scope == "new_files_only":
+        diff = filter_diff_to_new_files_only(diff)
+        if not diff.strip():
+            print("No new files in this PR (review_scope is new_files_only). Skipping review.", file=sys.stderr)
+            sys.exit(0)
+        print("Reviewing only new files (review_scope=new_files_only).", file=sys.stderr)
+
     style, arch, anti = load_context()
     print("Running Agno agent (Gemini)...", file=sys.stderr)
     raw = run_agent(diff, style, arch, anti, config)

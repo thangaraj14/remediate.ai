@@ -8,6 +8,20 @@
 .settings/
 *.code-workspace
 
+### Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+dist/
+build/
+
 ### Java template
 # Compiled class file
 *.class

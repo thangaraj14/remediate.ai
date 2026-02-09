@@ -1,5 +1,6 @@
 {
-  "_comment": "Optional. Edit to tune the AI Review Bot per project. See ai-review-bot-validation/README.md#configuration.",
+  "_comment": "Optional. See README.md#configuration.",
+  "review_scope": "all",
   "max_inline_comments": 5,
   "allow_good_to_have_inline": false,
   "summary_grades": ["Consistency", "Quality", "Security"],
