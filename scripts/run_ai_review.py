@@ -41,8 +41,8 @@ def load_context() -> tuple[str, str, str]:
 
 
 def build_system_prompt(style: str, arch: str, anti: str) -> str:
-    """Build the Senior VCF Engineer persona and knowledge."""
-    return f"""You are a Senior VCF Engineer performing a rigorous, professional code review.
+    """Build the Senior Engineer persona and knowledge."""
+    return f"""You are a Senior Engineer doing a minimal, high-signal code review.
 
 ## Repository knowledge
 
@@ -55,21 +55,21 @@ def build_system_prompt(style: str, arch: str, anti: str) -> str:
 ### Anti-patterns to flag
 {anti}
 
-## Your task
-Review the provided git diff. For each meaningful finding (style, security, performance, logic):
-1. Produce up to 5 **inline comments** with: file path (as in the diff), line number (in the new file), and a short, actionable comment. Be specific and suggest a fix when possible.
-2. Produce one **executive summary** that:
-   - Grades the change on: Consistency, Quality, Security (use: Good / Needs improvement / Critical).
-   - Lists the top 3 actionable improvements.
+## Rules (strict)
+- Comment **only on must-fix issues**: real bugs, security risks, or blocking quality problems. Do not add nitpicks, style-only suggestions, or optional improvements.
+- Add **at most 3 inline comments**. If nothing must be fixed, return zero comments.
+- Each comment: **one short sentence** with the fix (e.g. "Use env var for path." or "Catch NumberFormatException and log."). No preamble.
+- **Summary**: 1–2 sentences only. Say whether the change is fine or list the one thing that must be fixed. No tables, no bullet lists, no extra detail.
+- Do not pollute the PR. Less is more.
 
-**Output format:** Reply with ONLY a single JSON object. No markdown code fences (no ```), no explanation before or after. The "summary" field MUST be a non-empty string (at least 2–3 sentences with grades and top items).
+**Output format:** Reply with ONLY a single JSON object. No markdown code fences (no ```), no text before or after.
 {{
   "inline_comments": [
-    {{ "path": "<file path>", "line": <number>, "body": "<comment>" }}
+    {{ "path": "<file path>", "line": <number>, "body": "<one short sentence>" }}
   ],
-  "summary": "<non-empty markdown: grades for Consistency, Quality, Security and top 3 improvements>"
+  "summary": "<1–2 sentences only>"
 }}
-If there are no inline comments, use "inline_comments": [].
+If there are no must-fix issues, use "inline_comments": [] and set summary to e.g. "LGTM." or "No must-fix issues."
 Use only paths that appear in the diff; use the line number in the new (right) side of the diff."""
 
 
@@ -170,7 +170,7 @@ def _fallback_summary(raw: str) -> str:
 
 def post_to_github(
     inline_comments: list[dict],
-    summary: str,
+    summary_body: str,
     repo: str,
     pr_number: int,
     head_sha: str,
@@ -189,7 +189,7 @@ def post_to_github(
         "X-GitHub-Api-Version": "2022-11-28",
     }
 
-    for c in inline_comments:
+    for c in inline_comments[:3]:
         path = c.get("path") or c.get("file")
         line = c.get("line")
         body = c.get("body") or c.get("comment")
@@ -211,11 +211,10 @@ def post_to_github(
             print(f"Warning: failed to post comment on {path}:{line} — {r.status_code} {r.text[:200]}", file=sys.stderr)
 
     # Post summary as a single PR comment
-    summary_body = f"## AI-Review-Bot — Executive summary\n\n{summary}"
     r = requests.post(
         f"{base}/issues/{pr_number}/comments",
         headers=headers,
-        json={"body": summary_body[:65536]},
+        json={"body": (summary_body or "").strip()[:65536]},
         timeout=30,
     )
     if not r.ok:
@@ -241,13 +240,14 @@ def main() -> None:
 
     inline = data.get("inline_comments") or []
     summary = data.get("summary") or "No summary generated."
+    summary_body = f"## AI-Review-Bot\n\n{summary}"
 
     if args.dry_run:
         print("=== Inline comments ===")
         for c in inline:
             print(f"  {c.get('path', '?')}:{c.get('line', '?')} — {c.get('body', '')[:80]}...")
-        print("\n=== Summary ===")
-        print(summary)
+        print("\n=== Summary (comment body) ===")
+        print(summary_body)
         return
 
     token = os.environ.get("GITHUB_TOKEN")
@@ -261,7 +261,7 @@ def main() -> None:
         print(json.dumps({"inline_comments": inline, "summary": summary}, indent=2))
         sys.exit(0)
 
-    post_to_github(inline, summary, repo, int(pr_number), head_sha, token)
+    post_to_github(inline, summary_body, repo, int(pr_number), head_sha, token)
     print("Done.")
 
 

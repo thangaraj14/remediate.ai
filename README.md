@@ -6,7 +6,7 @@ This repository is a **validation harness** for the AI-Review-Bot—an agentic a
 
 - **Trigger**: `pull_request` (opened / synchronize) → GitHub Action runs.
 - **Context**: Deep checkout + `git diff` isolation.
-- **Brain**: Agno Agent with "Senior VCF Engineer" persona + repository knowledge (STYLE_GUIDE, anti-patterns).
+- **Brain**: Agno Agent with Senior Engineer persona + repository knowledge (STYLE_GUIDE, anti-patterns).
 - **LLM**: Gemini 1.5 Pro/Flash for security, performance, and readability analysis.
 - **Output**: Inline comments on the diff + executive summary comment on the PR.
 
@@ -30,6 +30,8 @@ In **Settings → Secrets and variables → Actions**, add:
 |-------------------|-------------|
 | `GOOGLE_API_KEY`  | Google AI / Gemini API key ([create one](https://aistudio.google.com/apikey)) |
 | `GITHUB_TOKEN`    | Usually provided by the workflow; for custom bots you may add a PAT with `repo` scope |
+
+Optional: set **`GEMINI_MODEL`** in the workflow env (or repo variables) to override the default `gemini-2.5-flash` (e.g. `gemini-2.0-flash`, `gemini-2.5-pro`). See [Gemini models](https://ai.google.dev/gemini-api/docs/models).
 
 The workflow uses the built-in `GITHUB_TOKEN`; the job has `pull-requests: write` so it can post comments without an extra Personal Access Token.
 
