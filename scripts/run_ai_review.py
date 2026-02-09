@@ -17,11 +17,14 @@ from pathlib import Path
 # Repository root (script lives in scripts/)
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# Default config (used when ai-review.config.json is missing or invalid)
+# Default config (used when ai-review.config.json is missing or invalid).
+# See README.md#configuration and ai-review.config.example.json for all options.
 DEFAULT_CONFIG = {
     "review_scope": "all",
     "max_inline_comments": 5,
     "allow_good_to_have_inline": False,
+    "post_inline_comments": True,
+    "diff_max_lines": 0,
     "summary_grades": ["Consistency", "Quality", "Security"],
     "max_required_in_summary": 3,
     "max_good_to_have_in_summary": 3,
@@ -93,6 +96,43 @@ def filter_diff_to_new_files_only(diff: str) -> str:
             continue
         i += 1
     flush_section(in_new_file_section)
+    return "".join(out)
+
+
+def filter_diff_to_existing_files_only(diff: str) -> str:
+    """Keep only hunks for files that already existed (modified files); drop new-file sections."""
+    if not diff.strip():
+        return ""
+    lines = diff.splitlines(keepends=True)
+    out: list[str] = []
+    in_new_file_section = False
+    section_buffer: list[str] = []
+
+    def flush_section(keep: bool) -> None:
+        nonlocal section_buffer
+        if keep:
+            out.extend(section_buffer)
+        section_buffer = []
+
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if line.startswith("diff --git "):
+            flush_section(not in_new_file_section)
+            section_buffer = [line]
+            in_new_file_section = False
+            i += 1
+            while i < len(lines) and not lines[i].startswith("diff --git "):
+                section_buffer.append(lines[i])
+                if lines[i].startswith("--- ") and ("/dev/null" in lines[i] or "null" in lines[i]):
+                    in_new_file_section = True
+                if lines[i].strip() == "new file mode 100644" or lines[i].strip() == "new file mode 100755":
+                    in_new_file_section = True
+                i += 1
+            flush_section(not in_new_file_section)
+            continue
+        i += 1
+    flush_section(not in_new_file_section)
     return "".join(out)
 
 
@@ -176,6 +216,8 @@ Only after checking these dimensions, classify each finding as **Required** (mus
 Review the provided git diff. Classify findings into:
 - **Required changes**: {req_desc} These may be posted as inline comments.
 - **Good to have**: {good_desc} {good_rule}
+
+Review **every file** in the diff: both newly added files and **modified (existing) files**. Post inline comments on any file where you find required issues—do not limit comments to new files only. Use the line number from the **new (right) side** of the diff for each comment.
 
 Be selective—do not pollute the PR with excessive suggestions. Reserve inline comments for required/critical findings only (max {max_inline}). Put good-to-have items only in the summary unless otherwise allowed.
 
@@ -410,6 +452,19 @@ def main() -> None:
             print("No new files in this PR (review_scope is new_files_only). Skipping review.", file=sys.stderr)
             sys.exit(0)
         print("Reviewing only new files (review_scope=new_files_only).", file=sys.stderr)
+    elif review_scope == "existing_files_only":
+        diff = filter_diff_to_existing_files_only(diff)
+        if not diff.strip():
+            print("No modified existing files in this PR (review_scope is existing_files_only). Skipping review.", file=sys.stderr)
+            sys.exit(0)
+        print("Reviewing only modified existing files (review_scope=existing_files_only).", file=sys.stderr)
+
+    diff_max_lines = int(config.get("diff_max_lines") or 0)
+    if diff_max_lines > 0:
+        lines = diff.splitlines()
+        if len(lines) > diff_max_lines:
+            diff = "\n".join(lines[:diff_max_lines]) + "\n\n... (diff truncated by diff_max_lines)\n"
+            print(f"Diff truncated to {diff_max_lines} lines (diff_max_lines).", file=sys.stderr)
 
     style, arch, anti = load_context()
     print("Running Agno agent (Gemini)...", file=sys.stderr)
@@ -441,6 +496,9 @@ def main() -> None:
     max_inline = int(config.get("max_inline_comments", 5))
     if len(inline) > max_inline:
         inline = inline[:max_inline]
+    post_inline = config.get("post_inline_comments", True)
+    if not post_inline:
+        inline = []
     post_to_github(inline, summary, repo, int(pr_number), head_sha, token)
     print("Done.")
 

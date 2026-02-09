@@ -1,5 +1,5 @@
 {
-  "_comment": "Optional. See README.md#configuration.",
+  "_comment": "Copy to ai-review.config.json and edit. See README.md#configuration for all options.",
   "review_scope": "all",
   "max_inline_comments": 5,
   "allow_good_to_have_inline": false,

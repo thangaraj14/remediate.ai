@@ -210,8 +210,8 @@ The workflow uses the built-in `GITHUB_TOKEN` with `pull-requests: write` so it 
 
 | Location | Contents |
 |----------|----------|
-| **Repository root** | `.github/workflows/ai-review.yml`, `scripts/run_ai_review.py`, `requirements.txt`, `STYLE_GUIDE.md`, `docs/`, `ai-review.config.json` (optional), `README.md` (this file). |
-| **`ai-review-bot-validation/`** | `review/` (sample/demo code for bot validation). |
+| **Repository root** | `.github/workflows/ai-review.yml`, `scripts/run_ai_review.py`, `requirements.txt`, `STYLE_GUIDE.md`, `docs/`, `ai-review.config.json` (optional), `ai-review.config.example.json` (all options), `README.md` (this file). |
+| **`ai-review-bot-validation/review/`** | Sample/demo code for bot validation (no README in that folder; docs are here at root). |
 
 ---
 
@@ -219,11 +219,15 @@ The workflow uses the built-in `GITHUB_TOKEN` with `pull-requests: write` so it 
 
 Admins can tune the bot per repo by editing **`ai-review.config.json`** at the repository root. Omit the file to use defaults.
 
+**To see all options in one place:** copy **`ai-review.config.example.json`** to `ai-review.config.json` and edit, or use the table below.
+
 | Key | Default | Description |
 |-----|---------|-------------|
-| `review_scope` | `"all"` | **`"all"`**: Review the full PR diff (all changed and new files). **`"new_files_only"`**: Review only files that are **new** in the PR (ignore changes to existing files). |
+| `review_scope` | `"all"` | **`"all"`**: Review the full PR diff (new and modified files); post comments on any file. **`"new_files_only"`**: Only files **new** in the PR. **`"existing_files_only"`**: Only **modified** (existing) files; ignore new files. |
 | `max_inline_comments` | `5` | Maximum number of inline comments to post on the PR. |
 | `allow_good_to_have_inline` | `false` | If `true`, the bot may post some “good to have” suggestions as inline comments. |
+| `post_inline_comments` | `true` | If `false`, only the executive summary is posted; no inline comments on the diff. |
+| `diff_max_lines` | `0` | If > 0, the diff is truncated to this many lines before sending to the model (avoids token limits). `0` = no truncation. |
 | `summary_grades` | `["Consistency", "Quality", "Security"]` | Dimensions to grade in the executive summary (e.g. add `"Performance"`, `"Tests"`). |
 | `max_required_in_summary` | `3` | Max bullets for “Required changes” in the summary. |
 | `max_good_to_have_in_summary` | `3` | Max bullets for “Good to have” in the summary. |
@@ -299,6 +303,9 @@ Output: inline comments and summary printed to stdout; nothing is posted to the 
 
 5. **review_scope is new_files_only and PR has no new files**  
    If the diff is empty after filtering to new files only, the script will exit with a message. Open a PR that adds at least one new file, or set `review_scope` to `"all"`.
+
+6. **With `review_scope` "all", no comments on existing (modified) files**  
+   The agent is instructed to review **every file** in the diff (new and modified) and to post inline comments on any file with required issues. Ensure `review_scope` is `"all"` in `ai-review.config.json`. To review only modified files and skip new ones, set `review_scope` to `"existing_files_only"`.
 
 ---
 
