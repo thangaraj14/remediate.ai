@@ -87,6 +87,16 @@ If the workflow runs but no inline/summary comments are posted, check:
 4. **GitHub Enterprise**  
    The script uses `GITHUB_API_URL` (set in the workflow from `github.server_url`). If you use a different API base, set `GITHUB_API_URL` in the workflow env.
 
+## Ensuring review comments get resolved
+
+**In-repo check (code):** The workflow **Require review resolved** (`.github/workflows/require-review-resolved.yml`) runs on every PR and calls `scripts/check_review_resolved.py`, which uses the GitHub GraphQL API to count unresolved review threads. If any exist, the job fails, so the PR shows a failing check until all conversations are resolved. To block merge, add the **Require review resolved** workflow (or its `check-resolved` job) as a required status check in **Settings** → **Branches** → branch protection.
+
+1. **Resolving the bot’s comments**  
+   Authors or reviewers open the **Files changed** tab, find each AI comment thread, then either fix the code and **Resolve conversation**, or reply (e.g. “Won’t fix”) and **Resolve conversation**. Once all are resolved, the “Require review resolved” check passes.
+
+2. **Branch protection (optional)**  
+   For an extra gate at merge time, enable **Require conversation resolution before merging** in **Settings** → **Branches** (or in Rulesets). That blocks merge in the UI; the workflow above blocks merge via a required status check.
+
 ## Validation checklist
 
 After pushing and opening a PR, confirm:
