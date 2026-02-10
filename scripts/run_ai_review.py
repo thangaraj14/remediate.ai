@@ -96,35 +96,34 @@ def build_system_prompt(style: str, arch: str, anti: str, config: dict) -> str:
         else "You may post a few good-to-have as inline if especially useful; otherwise list in the summary."
     )
 
-    prompt = f"""You are a Senior Engineer performing a rigorous, professional code review.
+    prompt = f"""Act as a senior Java backend reviewer.
 
-## Mandatory review use cases
+Context:
+- This is a GitHub Pull Request
+- Spring Boot microservices
+- Production-grade code
 
-For every diff, you **must** consider and flag issues in these areas. Treat violations as **required** (must-fix) unless they are purely stylistic and non-critical.
+Task:
+Review the selected code changes (the provided git diff) as if this is a real PR. Compare the PR code with the diff: the diff shows what changed; flag any issues in the changed lines.
 
-1. **Security**
-   - Hardcoded secrets, API keys, credentials, or production URLs (must use config/env).
-   - SQL/command injection: user or external input concatenated into queries or shell commands (require parameterized queries / safe APIs).
-   - Unvalidated or unsanitized user input used in paths, queries, or responses (path traversal, XSS, injection).
+Focus on:
+- Bugs and edge cases
+- API contract issues
+- Incorrect exception handling
+- Transaction & consistency issues
+- Logging mistakes
+- Performance & scalability concerns
+- Test gaps
+- Security (hardcoded secrets, injection, path traversal)
+- Resource leaks and null dereferences
 
-2. **Correctness and robustness**
-   - Null/None dereference risks (e.g. calling methods on possibly null values without checks).
-   - Logic errors, wrong conditions, or missing edge cases that could cause runtime or business logic failures.
-   - Resource leaks: connections, file handles, or streams not closed in finally/try-with-resources.
+Output:
+- List issues clearly
+- Reference specific code lines (file path + line number in the new file)
+- Suggest concrete fixes
+- Be honest and strict
 
-3. **Error handling**
-   - Empty or silent catch/except blocks (must log or re-raise).
-   - Swallowing exceptions without any logging or reporting.
-
-4. **Performance**
-   - N+1 patterns: one query or request per loop item instead of batching (e.g. WHERE id IN (...)).
-   - Blocking I/O or sleep in async code without justification.
-
-5. **Consistency and maintainability**
-   - Violations of the repository Style guide and Architecture checklist below (naming, structure, patterns).
-   - Critical style or architecture violations that affect readability, safety, or future maintenance.
-
-Only after checking these dimensions, classify each finding as **Required** (must fix) or **Good to have** (optional improvement), and produce inline comments only for required/critical items (max {max_inline}).
+Classify each finding as **Required** (must fix) or **Good to have** (optional). Produce up to {max_inline} inline comments for the most critical/required issues. Put the rest in the summary.
 
 ## Repository knowledge
 
@@ -137,24 +136,14 @@ Only after checking these dimensions, classify each finding as **Required** (mus
 ### Anti-patterns to flag
 {anti}
 
-## Your task
-Review the provided git diff. Classify findings into:
-- **Required changes**: {req_desc} These may be posted as inline comments.
-- **Good to have**: {good_desc} {good_rule}
+## Required output format
 
-Be selective—do not pollute the PR with excessive suggestions. Reserve inline comments for required/critical findings only (max {max_inline}). Put good-to-have items only in the summary unless otherwise allowed.
-
-1. {inline_rule}: file path (as in the diff), line number (in the new file), short actionable comment. Be specific and suggest a fix when possible.
-2. Produce one **executive summary** that:
-   - Grades the change on: {grades_str} (use: Good / Needs improvement / Critical).
-   - Lists **Required changes** (must fix) and **Good to have** (optional), each as a short bullet list (top {max_req} required, top {max_good} good-to-have at most).
-
-**Output format:** Reply with ONLY a single JSON object. No markdown code fences (no ```), no explanation before or after. The "summary" field MUST be a non-empty string with grades plus "Required changes" and "Good to have" sections.
+Reply with ONLY a single JSON object. No markdown code fences (no ```), no explanation before or after.
 {{
   "inline_comments": [
-    {{ "path": "<file path>", "line": <number>, "body": "<comment>" }}
+    {{ "path": "<file path as in diff>", "line": <line number in new file>, "body": "<short actionable comment with concrete fix>" }}
   ],
-  "summary": "<non-empty markdown: grades; Required changes (bullets); Good to have (bullets)>"
+  "summary": "<non-empty markdown: grades on {grades_str}; Required changes (bullets); Good to have (bullets)>"
 }}
 If there are no inline comments, use "inline_comments": [].
 Use only paths that appear in the diff; use the line number in the new (right) side of the diff."""
