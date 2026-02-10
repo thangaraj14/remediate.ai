@@ -4,7 +4,7 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
-public class UserDataService {
+public class UserProfileDataService {
 
     private static final String DB_URL = "jdbc:mysql://prod-db.internal:3306/app";
     private static final String API_KEY = "sk-live-abc123secretkey";

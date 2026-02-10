@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class ReportService
+class ReportGeneratorService
   API_KEY = "rk_live_abc123secret"
   EXPORT_BASE = "/var/app/shared/exports"
 

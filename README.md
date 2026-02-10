@@ -2,7 +2,7 @@
 
 This document describes the **AI-Review-Bot**: an automated, agentic code review layer that runs in GitHub Actions on every Pull Request. It uses the [Agno](https://agno.com) framework with **Gemini** to provide inline comments and an executive summary, aligned with your repository’s style guide and anti-patterns.
 
-**In this repo**, the bot lives at **repository root**: workflow `.github/workflows/ai-review.yml`, `scripts/run_ai_review.py`, `requirements.txt`, `STYLE_GUIDE.md`, and `docs/` are at the parent directory. This folder (`ai-review-bot-validation/`) contains sample code and this README for validation and demos.
+**In this repo**, the bot lives at the repository root: `.github/workflows/ai-review.yml`, `scripts/run_ai_review.py`, `requirements.txt`, `STYLE_GUIDE.md`, and `docs/`. The folder `ai-review-bot-validation/` contains sample code for validation and demos.
 
 ---
 
@@ -155,15 +155,16 @@ Repository-specific rules are in:
 
 ## Demo files (expected review comments)
 
-The `review/` folder contains **intentionally flawed** sample code so you can open a PR and see the bot’s inline comments and summary in action. Use these to validate the pipeline and to show teammates what to expect.
+The **`ai-review-bot-validation/review/`** folder contains **intentionally flawed** sample code so you can open a PR and see the bot’s inline comments and summary in action. Use these to validate the pipeline and to show teammates what to expect.
 
 | File | Purpose | Issues the bot should flag (examples) |
 |------|---------|--------------------------------------|
-| **`UserDataService.java`** | Data access and user operations. | Hardcoded DB URL and credentials; API key in source; SQL concatenation (injection); path traversal in `loadProfilePicture`; empty/silent catch blocks; N+1 in `getNamesForIds`; **NPE** (`name.trim()`, `addr.getLine1()` when null); **SQL performance** (`findActiveUserEmails`: SELECT *, UPPER on column); **missing tests** (`getUserDisplayName`). |
-| **`api_handler.py`** | HTTP API and shell/export. | Hardcoded API key; command injection via user input in shell; empty `except`; file handle not closed on error path; missing type hints at boundaries. |
-| **`OrderService.java`** | Orders and idempotency. | Resource leak; logic bug (wrong comparison); broad `catch` with no logging; **NPE** (`getOrderStatusLower`: .toLowerCase() on null); **SQL performance** (`getOrderStatus`: SELECT * for one column); **missing tests** (`isOrderFulfillable`). |
-| **`report_service.rb`** | Rails-style report generation. | Hardcoded API key and prod webhook URL; SQL injection; path traversal; bare `rescue`; N+1 in `generate_user_report`; **loop not closed**: `concat_export_contents` opens `File` in loop but never closes; **SQL performance** (`active_users_slow`: SELECT *, LOWER on column). |
-| **`PaymentRepository.scala`** | Payment data access. | Hardcoded JDBC URL and credentials; SQL injection; resource leak in `findByTransactionId` and `updateStatus`; empty catch; **SQL performance** (`allStatuses`: SELECT * when only status needed). |
+| **`UserProfileDataService.java`** | Data access and user operations. | Hardcoded DB URL and credentials; API key in source; SQL concatenation (injection); path traversal in `loadProfilePicture`; empty/silent catch blocks; N+1 in `getNamesForIds`; **NPE** (`name.trim()`, `addr.getLine1()` when null); **SQL performance** (`findActiveUserEmails`: SELECT *, UPPER on column); **missing tests** (`getUserDisplayName`). |
+| **`export_webhook_handler.py`** | HTTP API and shell/export. | Hardcoded API key; command injection via user input in shell; empty `except`; file handle not closed on error path; missing type hints at boundaries. |
+| **`OrderFulfillmentService.java`** | Orders and idempotency. | Resource leak; logic bug (wrong comparison); broad `catch` with no logging; **NPE** (`getOrderStatusLower`: .toLowerCase() on null); **SQL performance** (`getOrderStatus`: SELECT * for one column); **missing tests** (`isOrderFulfillable`). |
+| **`report_generator_service.rb`** | Rails-style report generation. | Hardcoded API key and prod webhook URL; SQL injection; path traversal; bare `rescue`; N+1 in `generate_user_report`; **loop not closed**: `concat_export_contents` opens `File` in loop but never closes; **SQL performance** (`active_users_slow`: SELECT *, LOWER on column). |
+| **`PaymentsDataAccess.scala`** | Payment data access. | Hardcoded JDBC URL and credentials; SQL injection; resource leak in `findByTransactionId` and `updateStatus`; empty catch; **SQL performance** (`allStatuses`: SELECT * when only status needed). |
+| **`schema.graphql`** | GraphQL API schema. | Sensitive fields exposed on `User` (`password`, `apiToken`); unbounded lists `users`/`orders` with no pagination (DoS/overfetch risk); inconsistent naming (`created_at` vs camelCase convention). |
 
 When you add or change these files in a branch and open a PR, the bot will post inline comments on the problematic lines and an executive summary with grades (e.g. Consistency, Quality, Security) plus “Required changes” and “Good to have” bullets.
 
@@ -195,7 +196,7 @@ The workflow uses the built-in `GITHUB_TOKEN` with `pull-requests: write` so it 
 ### 3. Open a Pull Request
 
 - Create a branch: `git checkout -b feature/sample-change`
-- Use or modify files in `review/` (e.g. add the demo files, or make a small change to `UserDataService.java`).
+- Use or modify files in `ai-review-bot-validation/review/` (e.g. add the demo files, or make a small change).
 - Push and open a PR against `main`.
 
 ### 4. Verify
@@ -210,8 +211,8 @@ The workflow uses the built-in `GITHUB_TOKEN` with `pull-requests: write` so it 
 
 | Location | Contents |
 |----------|----------|
-| **Repository root** (parent of this folder) | `.github/workflows/ai-review.yml`, `scripts/run_ai_review.py`, `requirements.txt`, `STYLE_GUIDE.md`, `docs/` (architecture + anti-patterns), `ai-review.config.json` (optional). |
-| **This folder** (`ai-review-bot-validation/`) | `review/` (sample/demo code), this README. |
+| **Repository root** | `.github/workflows/ai-review.yml`, `scripts/run_ai_review.py`, `requirements.txt`, `STYLE_GUIDE.md`, `docs/`, `ai-review.config.json` (optional), `ai-review.config.example.json` (all options), `README.md` (this file). |
+| **`ai-review-bot-validation/review/`** | Sample/demo code for bot validation (no README in that folder; docs are here at root). |
 
 ---
 
@@ -219,10 +220,14 @@ The workflow uses the built-in `GITHUB_TOKEN` with `pull-requests: write` so it 
 
 Admins can tune the bot per repo by editing **`ai-review.config.json`** at the repository root. Omit the file to use defaults.
 
+**To see all options in one place:** copy **`ai-review.config.example.json`** to `ai-review.config.json` and edit, or use the table below.
+
 | Key | Default | Description |
 |-----|---------|-------------|
 | `max_inline_comments` | `5` | Maximum number of inline comments to post on the PR. |
 | `allow_good_to_have_inline` | `false` | If `true`, the bot may post some “good to have” suggestions as inline comments. |
+| `post_inline_comments` | `true` | If `false`, only the executive summary is posted; no inline comments on the diff. |
+| `diff_max_lines` | `0` | If > 0, the diff is truncated to this many lines before sending to the model (avoids token limits). `0` = no truncation. |
 | `summary_grades` | `["Consistency", "Quality", "Security"]` | Dimensions to grade in the executive summary (e.g. add `"Performance"`, `"Tests"`). |
 | `max_required_in_summary` | `3` | Max bullets for “Required changes” in the summary. |
 | `max_good_to_have_in_summary` | `3` | Max bullets for “Good to have” in the summary. |
@@ -250,7 +255,7 @@ Example for a stricter project:
 
 You can run the reviewer locally without posting to GitHub (dry-run):
 
-From the **repository root** (parent of this folder):
+From the **repository root**:
 
 ```bash
 python -m venv .venv
@@ -283,7 +288,7 @@ Output: inline comments and summary printed to stdout; nothing is posted to the 
    In the PR’s **Actions** tab, open the “AI Review Bot” run. If you see `GOOGLE_API_KEY is not set`, add the secret in **Settings → Secrets and variables → Actions** and re-run the workflow (or push a new commit).
 
 3. **Workflow ran from the PR branch**  
-   The job runs on the branch that has the PR. That branch must contain `.github/workflows/ai-review.yml`, `scripts/run_ai_review.py`, and `requirements.txt`. If the workflow was added on `main` after the PR was opened, push a commit to the PR branch or re-run the workflow.
+   The job runs on the branch that has the PR. That branch must contain `.github/workflows/ai-review.yml`, `scripts/run_ai_review.py`, and `requirements.txt`. If the workflow was only added on `main` after the PR was opened, push a commit to the PR branch or re-run the workflow.
 
 4. **GitHub Enterprise**  
    The script uses `GITHUB_API_URL` (from `github.server_url` in the workflow). If you use a different API base, set `GITHUB_API_URL` in the workflow env.

@@ -2,7 +2,7 @@ package review
 
 import java.sql.{Connection, DriverManager, ResultSet, Statement}
 
-object PaymentRepository {
+object PaymentsDataAccess {
 
   private val JdbcUrl  = "jdbc:postgresql://prod-payments.internal:5432/payments"
   private val User     = "payments_rw"
